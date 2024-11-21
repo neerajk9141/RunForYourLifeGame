@@ -22,6 +22,9 @@ class GameManager: ObservableObject {
     private var gameTime: Double = 0
     private var lastScore: Int = -1 // Cache to store the previous score
 
+    private var isOnCeiling: Bool = false // Track whether the player is on the ceiling
+
+    
         // MARK: - Scene Setup
     @MainActor func setupScene(for content: RealityViewContent) {
         content.add(anchor)
@@ -39,6 +42,9 @@ class GameManager: ObservableObject {
                 anchor.addChild(road)
             }
         }
+        
+            // Add walls for closed space
+        addWalls()
         
             // Add player
         Task {
@@ -92,42 +98,6 @@ class GameManager: ObservableObject {
         startGame()
     }
     
-    func jump() {
-        guard !isJumping else { return } // Prevent multiple jumps
-        isJumping = true
-        
-        let jumpHeight: Float = 1.0
-        let totalDuration: Float = 0.8 // Total duration of the jump (up and down)
-        let frameRate: Float = 1 / 60 // 60 FPS for smooth animation
-        let upwardDuration: Float = totalDuration / 2 // Half for upward motion
-        let downwardDuration: Float = totalDuration / 2
-        
-        var elapsedTime: Float = 0
-        let originalPosition = player.position
-        
-            // Timer for frame-by-frame updates
-        Timer.scheduledTimer(withTimeInterval: Double(frameRate), repeats: true) { timer in
-            elapsedTime += frameRate
-            
-            if elapsedTime <= upwardDuration {
-                    // Upward motion with ease-out
-                let t = elapsedTime / upwardDuration
-                let easedT = t * (2 - t) // Quadratic easing-out
-                self.player.position.y = originalPosition.y + easedT * jumpHeight
-            } else if elapsedTime <= totalDuration {
-                    // Downward motion with ease-in
-                let t = (elapsedTime - upwardDuration) / downwardDuration
-                let easedT = t * t // Quadratic easing-in
-                self.player.position.y = originalPosition.y + (1 - easedT) * jumpHeight
-            } else {
-                    // End of jump
-                self.player.position.y = originalPosition.y
-                self.isJumping = false
-                timer.invalidate() // Stop the timer
-            }
-        }
-    }
-    
         // MARK: - Game Update Loop
     @MainActor
     private func updateGame() async {
@@ -150,19 +120,84 @@ class GameManager: ObservableObject {
         timer?.cancel()
         print("Game Over! Final Score: \(score)")
     }
+
+    
+    @MainActor
+    private func loadEntity(named name: String, scale: Float, position: SIMD3<Float>, animations: Bool = true) async -> Entity? {
+        if let entity = try? await Entity(named: name, in: realityKitContentBundle) {
+            entity.scale *= scale
+            entity.position = position
+            entity.generateCollisionShapes(recursive: true)
+            if animations, let animation = entity.availableAnimations.first {
+                entity.playAnimation(animation.repeat(count: 0))
+            }
+            return entity
+        }
+        return nil
+    }
+    
+        // MARK: - Lighting
+    private func addLighting() {
+        let light = DirectionalLight()
+        light.light.intensity = 1000
+        light.light.color = .white
+        light.position = [0, 5, -5]
+        anchor.addChild(light)
+    }
+    
+
+}
+
+//MARK: Walls
+extension GameManager {
+    
+    private func addWalls() {
+        let wallThickness: Float = 0.2
+        let wallHeight: Float = 5.0 // Increased to cover the larger distance
+        let wallLength: Float = 48.0
+        
+        let leftWall = ModelEntity(mesh: .generateBox(size: [wallThickness, wallHeight, wallLength]))
+        leftWall.position = [-2.5, 1.5, -5] // Centered between ground and ceiling
+        leftWall.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
+        
+        let rightWall = ModelEntity(mesh: .generateBox(size: [wallThickness, wallHeight, wallLength]))
+        rightWall.position = [2.5, 1.5, -5] // Centered between ground and ceiling
+        rightWall.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
+        
+        let ceiling = ModelEntity(mesh: .generateBox(size: [5.0, wallThickness, wallLength]))
+        ceiling.position = [0, 4.0, -5] // Raised for the new ceiling height
+        ceiling.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
+        
+        let floor = ModelEntity(mesh: .generateBox(size: [5.0, wallThickness, wallLength]))
+        floor.position = [0, -0.5, -5]
+        floor.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
+        
+        anchor.addChild(leftWall)
+        anchor.addChild(rightWall)
+        anchor.addChild(ceiling)
+        anchor.addChild(floor)
+    }
+    
+}
+
+//MARK: Player And Roads
+
+extension GameManager {
     
         // MARK: - Road Scrolling
     @MainActor
     private func createRoads() async -> [Entity] {
         var roads = [Entity]()
-        var roadLength: Float = 20.0 // Length of the road segment (adjust to match the model size)
+        let roadLength: Float = 8.0 // Adjusted for better spacing
         
-        for i in 0..<3 { // Create 3 road segments
-            if let road = try? await Entity(named: "road", in: realityKitContentBundle) {
-                road.position = [Float(i) * roadLength, -0.5, -5]
-                road.scale *= 2.5 // Ensure scaling matches the design
-                road.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0]) // Rotate correctly
-                roads.append(road)
+        for i in 0..<6 { // Create 6 road segments
+            for yPosition in [0.0, 3.0] { // Increased the ceiling height to 3.0
+                if let road = try? await Entity(named: "road", in: realityKitContentBundle) {
+                    road.position = SIMD3<Float>(Float(i) * roadLength, Float(yPosition - 0.5), -5)
+                    road.scale *= 1.2
+                    road.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1]) // Rotate road by 90 degrees
+                    roads.append(road)
+                }
             }
         }
         
@@ -170,11 +205,11 @@ class GameManager: ObservableObject {
     }
     
     private func updateRoad() {
-        let roadLength: Float = 20.0 // Length of the road segment
+        let roadLength: Float = 10.0
         for road in roads {
             road.position.x -= 0.1
-            if road.position.x < -roadLength { // Move road to the end of the loop when out of bounds
-                road.position.x += roadLength * Float(roads.count)
+            if road.position.x < -roadLength { // Move road to the back of the loop
+                road.position.x += roadLength * Float(roads.count / 2)
             }
         }
     }
@@ -199,81 +234,16 @@ class GameManager: ObservableObject {
     }
     
     private func updatePlayer() {
-        if player.position.y > 0 {
-            player.position.y -= 0.02 // Simulate gravity
+            // Prevent the player from falling
+        if isOnCeiling {
+            player.position.y = 3.0 // Stick to the ceiling
         } else {
-            isJumping = false
+            player.position.y = 0.0 // Stick to the ground
         }
     }
-    
-        // MARK: - Obstacles
-    @MainActor
-    private func createObstacle() async -> Entity {
-        
-        if let obstacle = await loadEntity(named: "obstacle", scale: 0.3, position: [5, 0, -5], animations: true) {
-            return obstacle
-        }
-        
-        if let obstacle = try? await Entity(named: "obstacle", in: realityKitContentBundle) {
-            obstacle.position = [5, 0, -5]
-            obstacle.generateCollisionShapes(recursive: true)
-            return obstacle
-        }
-        fatalError("Failed to load obstacle model!")
-    }
-    
-    @MainActor
-    private func loadEntity(named name: String, scale: Float, position: SIMD3<Float>, animations: Bool = true) async -> Entity? {
-        if let entity = try? await Entity(named: name, in: realityKitContentBundle) {
-            entity.scale *= scale
-            entity.position = position
-            entity.generateCollisionShapes(recursive: true)
-            if animations, let animation = entity.availableAnimations.first {
-                entity.playAnimation(animation.repeat(count: 0))
-            }
-            return entity
-        }
-        return nil
-    }
-    
-    @MainActor
-    private func updateObstacles() async {
-        if Int(gameTime * 10) % 20 == 0 {
-            if obstacles.last?.position.x ?? 0 < 3 {
-                let obstacle = await createObstacle()
-                anchor.addChild(obstacle)
-                obstacles.append(obstacle)
-            }
-        }
-        
-        for obstacle in obstacles {
-            obstacle.position.x -= 0.1
-            if obstacle.position.x < -5 {
-                obstacle.removeFromParent()
-                obstacles.removeAll { $0 == obstacle }
-                score += 10 // Add points for passing an obstacle
-            }
-        }
-    }
-    
-        // MARK: - Lighting
-    private func addLighting() {
-        let light = DirectionalLight()
-        light.light.intensity = 1000
-        light.light.color = .white
-        light.position = [0, 5, -5]
-        anchor.addChild(light)
-    }
-    
-        // MARK: - Collision Detection
-    private func checkCollisions() {
-        for obstacle in obstacles {
-            if player.position.distance(to: obstacle.position) < 0.3 {
-                gameOver()
-            }
-        }
-    }
-    
+}
+
+extension GameManager {
     
     @MainActor
     private func createScoreDisplay() -> ModelEntity {
@@ -321,10 +291,131 @@ class GameManager: ObservableObject {
         button.components[InputTargetComponent.self] = InputTargetComponent()
         return button
     }
+    
 }
 
-extension SIMD3 where Scalar == Float {
-    func distance(to other: SIMD3<Float>) -> Float {
-        return sqrt(pow(self.x - other.x, 2) + pow(self.y - other.y, 2) + pow(self.z - other.z, 2))
+extension GameManager {
+    
+    @MainActor func jump() {
+        guard !isJumping else { return }
+        isJumping = true
+        
+            // Toggle between ground and ceiling
+        toggleGravity()
+        isJumping = false
     }
+    
+        // Add to jump method to toggle gravity
+//    func jump() {
+//        guard !isJumping else { return }
+//        isJumping = true
+//        
+//            // Calculate jump parameters
+//        let jumpHeight: Float = 1.0
+//        let totalDuration: Float = 0.8 // Total duration of the jump (up and down)
+//        let frameRate: Float = 1 / 60 // 60 FPS for smooth animation
+//        let upwardDuration: Float = totalDuration / 2 // Half for upward motion
+//        let downwardDuration: Float = totalDuration / 2
+//        
+//        var elapsedTime: Float = 0
+//        let originalPosition = player.position
+//        
+//            // Timer for frame-by-frame updates
+//        Timer.scheduledTimer(withTimeInterval: Double(frameRate), repeats: true) { timer in
+//            elapsedTime += frameRate
+//            
+//            if elapsedTime <= upwardDuration {
+//                    // Upward motion with ease-out
+//                let t = elapsedTime / upwardDuration
+//                let easedT = t * (2 - t) // Quadratic easing-out
+//                self.player.position.y = originalPosition.y + easedT * jumpHeight
+//            } else if elapsedTime <= totalDuration {
+//                    // Downward motion with ease-in
+//                let t = (elapsedTime - upwardDuration) / downwardDuration
+//                let easedT = t * t // Quadratic easing-in
+//                self.player.position.y = originalPosition.y + (1 - easedT) * jumpHeight
+//            } else {
+//                    // End of jump
+//                self.toggleGravity()
+//                self.isJumping = false
+//                timer.invalidate()
+//            }
+//        }
+//    }
+    
+    
+        // Toggle gravity between ground and ceiling
+    @MainActor
+    private func toggleGravity() {
+        isOnCeiling.toggle()
+        let targetY: Float = isOnCeiling ? 3.0 : 0.0 // Updated for new ceiling height
+        let targetRotation = isOnCeiling ? simd_quatf(angle: .pi, axis: [1, 0, 0]) : simd_quatf(angle: 0, axis: [1, 0, 0])
+        
+        Task {
+            await animateProperty(duration: 0.3) { progress in
+                self.player.position.y = Float.lerp(from: self.player.position.y, to: targetY, t: progress)
+                self.player.transform.rotation = simd_slerp(self.player.transform.rotation, targetRotation, progress)
+            }
+        }
+    }
+    
+    func animateProperty(duration: Double, animation: @escaping (Float) -> Void) async {
+        let frameRate: Double = 1 / 60 // 60 FPS
+        let totalFrames = Int(duration / frameRate)
+        for frame in 0...totalFrames {
+            let progress = Float(frame) / Float(totalFrames)
+            animation(progress)
+            try? await Task.sleep(nanoseconds: UInt64(frameRate * 1_000_000_000)) // Sleep for frame duration
+        }
+    }
+ 
 }
+
+
+//MARK: Obstacles
+extension GameManager {
+    
+    
+        // Update obstacle creation to handle both ground and ceiling
+    @MainActor
+    private func createObstacle() async -> Entity {
+        let yPosition: Float = isOnCeiling ? 3.2 : 0.2 // Slightly above the road surface for both ground and ceiling
+        
+        if let obstacle = await loadEntity(named: "obstacle", scale: 0.3, position: [5, yPosition, -5], animations: true) {
+            return obstacle
+        }
+        fatalError("Failed to load obstacle model!")
+    }
+    
+    @MainActor
+    private func updateObstacles() async {
+        if Int(gameTime * 10) % 20 == 0 {
+            if obstacles.last?.position.x ?? 0 < 3 {
+                let obstacle = await createObstacle()
+                anchor.addChild(obstacle)
+                obstacles.append(obstacle)
+            }
+        }
+        
+        for obstacle in obstacles {
+            obstacle.position.x -= 0.1
+            if obstacle.position.x < -5 {
+                obstacle.removeFromParent()
+                obstacles.removeAll { $0 == obstacle }
+                score += 10
+            }
+        }
+    }
+    
+        // Update collision detection to handle ground and ceiling
+    private func checkCollisions() {
+        for obstacle in obstacles {
+            let isColliding = abs(player.position.y - obstacle.position.y) < 0.1 // Match y-positions
+            if isColliding && player.position.distance(to: obstacle.position) < 0.3 {
+                gameOver()
+            }
+        }
+    }
+    
+}
+

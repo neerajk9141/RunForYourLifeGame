@@ -16,16 +16,6 @@ struct ContentView: View {
 
             ToggleImmersiveSpaceButton()
             
-//            RunnerGameView()
-//                .gesture(DragGesture()
-//                    .onEnded { value in
-//                        if value.translation.height < 0 {
-//                            handleSwipe(.up)
-//                        } else if value.translation.height > 0 {
-//                            handleSwipe(.down)
-//                        }
-//                    }
-//                )
         }
         .padding()
     }

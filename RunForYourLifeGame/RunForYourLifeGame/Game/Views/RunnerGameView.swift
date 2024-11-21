@@ -28,6 +28,7 @@ struct RunnerGameView: View {
                     }
             )
             .ignoresSafeArea()
+            
                 // Score HUD
             Text("Score: \(gameManager.score)")
                 .font(.largeTitle)
