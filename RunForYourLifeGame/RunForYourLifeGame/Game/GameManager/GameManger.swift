@@ -157,11 +157,11 @@ extension GameManager {
         let wallLength: Float = 48.0
         
         let leftWall = ModelEntity(mesh: .generateBox(size: [wallThickness, wallHeight, wallLength]))
-        leftWall.position = [-2.5, 1.5, -5] // Centered between ground and ceiling
+        leftWall.position = [-5.5, 1.5, -5] // Centered between ground and ceiling
         leftWall.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
         
         let rightWall = ModelEntity(mesh: .generateBox(size: [wallThickness, wallHeight, wallLength]))
-        rightWall.position = [2.5, 1.5, -5] // Centered between ground and ceiling
+        rightWall.position = [5.5, 1.5, -5] // Centered between ground and ceiling
         rightWall.model?.materials = [SimpleMaterial(color: .darkGray, isMetallic: false)]
         
         let ceiling = ModelEntity(mesh: .generateBox(size: [5.0, wallThickness, wallLength]))
@@ -195,7 +195,7 @@ extension GameManager {
                 if let road = try? await Entity(named: "road", in: realityKitContentBundle) {
                     road.position = SIMD3<Float>(Float(i) * roadLength, Float(yPosition - 0.5), -5)
                     road.scale *= 1.2
-                    road.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 0, 1]) // Rotate road by 90 degrees
+                    road.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0]) // Rotate road by 90 degrees
                     roads.append(road)
                 }
             }
@@ -305,44 +305,6 @@ extension GameManager {
         isJumping = false
     }
     
-        // Add to jump method to toggle gravity
-//    func jump() {
-//        guard !isJumping else { return }
-//        isJumping = true
-//        
-//            // Calculate jump parameters
-//        let jumpHeight: Float = 1.0
-//        let totalDuration: Float = 0.8 // Total duration of the jump (up and down)
-//        let frameRate: Float = 1 / 60 // 60 FPS for smooth animation
-//        let upwardDuration: Float = totalDuration / 2 // Half for upward motion
-//        let downwardDuration: Float = totalDuration / 2
-//        
-//        var elapsedTime: Float = 0
-//        let originalPosition = player.position
-//        
-//            // Timer for frame-by-frame updates
-//        Timer.scheduledTimer(withTimeInterval: Double(frameRate), repeats: true) { timer in
-//            elapsedTime += frameRate
-//            
-//            if elapsedTime <= upwardDuration {
-//                    // Upward motion with ease-out
-//                let t = elapsedTime / upwardDuration
-//                let easedT = t * (2 - t) // Quadratic easing-out
-//                self.player.position.y = originalPosition.y + easedT * jumpHeight
-//            } else if elapsedTime <= totalDuration {
-//                    // Downward motion with ease-in
-//                let t = (elapsedTime - upwardDuration) / downwardDuration
-//                let easedT = t * t // Quadratic easing-in
-//                self.player.position.y = originalPosition.y + (1 - easedT) * jumpHeight
-//            } else {
-//                    // End of jump
-//                self.toggleGravity()
-//                self.isJumping = false
-//                timer.invalidate()
-//            }
-//        }
-//    }
-    
     
         // Toggle gravity between ground and ceiling
     @MainActor
@@ -379,7 +341,7 @@ extension GameManager {
         // Update obstacle creation to handle both ground and ceiling
     @MainActor
     private func createObstacle() async -> Entity {
-        let yPosition: Float = isOnCeiling ? 3.2 : 0.2 // Slightly above the road surface for both ground and ceiling
+        let yPosition: Float = isOnCeiling ? 2.2 : 0.2 // Slightly above the road surface for both ground and ceiling
         
         if let obstacle = await loadEntity(named: "obstacle", scale: 0.3, position: [5, yPosition, -5], animations: true) {
             return obstacle
