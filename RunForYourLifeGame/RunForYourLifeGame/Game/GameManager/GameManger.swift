@@ -44,7 +44,7 @@ class GameManager: ObservableObject {
         }
         
             // Add walls for closed space
-        addWalls()
+//        addWalls()
         
             // Add player
         Task {
@@ -85,7 +85,7 @@ class GameManager: ObservableObject {
         
             // Reset roads
         for (index, road) in roads.enumerated() {
-            road.position = [Float(index) * 10, -0.5, -5]
+            road.position = [Float(index) * 10, -0.05, -5]
         }
         
             // Reset obstacles
@@ -110,7 +110,7 @@ class GameManager: ObservableObject {
             updateScoreDisplay()
         }
         
-        updateRoad()
+//        updateRoad()
         updatePlayer()
         await updateObstacles()
         checkCollisions()
@@ -174,8 +174,8 @@ extension GameManager {
         
         anchor.addChild(leftWall)
         anchor.addChild(rightWall)
-        anchor.addChild(ceiling)
-        anchor.addChild(floor)
+//        anchor.addChild(ceiling)
+//        anchor.addChild(floor)
     }
     
 }
@@ -188,12 +188,12 @@ extension GameManager {
     @MainActor
     private func createRoads() async -> [Entity] {
         var roads = [Entity]()
-        let roadLength: Float = 8.0 // Adjusted for better spacing
+        let roadLength: Float = 50.0 // Adjusted for better spacing
         
         for i in 0..<6 { // Create 6 road segments
-            for yPosition in [0.0, 3.0] { // Increased the ceiling height to 3.0
+            for yPosition in [0.0, 4.0] { // Increased the ceiling height to 3.0
                 if let road = try? await Entity(named: "road", in: realityKitContentBundle) {
-                    road.position = SIMD3<Float>(Float(i) * roadLength, Float(yPosition - 0.5), -5)
+                    road.position = SIMD3<Float>(Float(i) * roadLength, Float(yPosition - 0.05), -5)
                     road.scale *= 1.2
                     road.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0]) // Rotate road by 90 degrees
                     roads.append(road)
@@ -205,7 +205,7 @@ extension GameManager {
     }
     
     private func updateRoad() {
-        let roadLength: Float = 10.0
+        let roadLength: Float = 0.1
         for road in roads {
             road.position.x -= 0.1
             if road.position.x < -roadLength { // Move road to the back of the loop
@@ -227,6 +227,7 @@ extension GameManager {
         if let player = try? await Entity(named: "player", in: realityKitContentBundle) {
             player.position = [-1.5, 0, -5]
             player.scale *= 10.0
+            player.transform.rotation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0])
             player.generateCollisionShapes(recursive: true)
             return player
         }
@@ -236,7 +237,7 @@ extension GameManager {
     private func updatePlayer() {
             // Prevent the player from falling
         if isOnCeiling {
-            player.position.y = 3.0 // Stick to the ceiling
+            player.position.y = 3.9 // Stick to the ceiling
         } else {
             player.position.y = 0.0 // Stick to the ground
         }
@@ -258,7 +259,7 @@ extension GameManager {
         let material = SimpleMaterial(color: .white, isMetallic: false)
         let textModel = ModelEntity(mesh: textMesh, materials: [material])
         textModel.name = "scoreDisplay"
-        textModel.position = [0, 2.5, -5] // Position above the player
+        textModel.position = [1, -1.5, -3] // Position above the player
         self.scroeEntity = textModel
         return textModel
     }
@@ -283,7 +284,7 @@ extension GameManager {
         let material = SimpleMaterial(color: .red, isMetallic: false)
         let button = ModelEntity(mesh: buttonMesh, materials: [material])
         
-        button.position = [0, 2.0, -5] // Position it above the player
+        button.position = [-1, -0.8, -3] // Position it above the player
         button.name = "resetButton"
         
             // Add interaction
@@ -310,7 +311,7 @@ extension GameManager {
     @MainActor
     private func toggleGravity() {
         isOnCeiling.toggle()
-        let targetY: Float = isOnCeiling ? 3.0 : 0.0 // Updated for new ceiling height
+        let targetY: Float = isOnCeiling ? 4.0 : 0.0 // Updated for new ceiling height
         let targetRotation = isOnCeiling ? simd_quatf(angle: .pi, axis: [1, 0, 0]) : simd_quatf(angle: 0, axis: [1, 0, 0])
         
         Task {
@@ -341,7 +342,7 @@ extension GameManager {
         // Update obstacle creation to handle both ground and ceiling
     @MainActor
     private func createObstacle() async -> Entity {
-        let yPosition: Float = isOnCeiling ? 2.2 : 0.2 // Slightly above the road surface for both ground and ceiling
+        let yPosition: Float = isOnCeiling ? 3.0 : 0.01 // Slightly above the road surface for both ground and ceiling
         
         if let obstacle = await loadEntity(named: "obstacle", scale: 0.3, position: [5, yPosition, -5], animations: true) {
             return obstacle
@@ -373,7 +374,7 @@ extension GameManager {
     private func checkCollisions() {
         for obstacle in obstacles {
             let isColliding = abs(player.position.y - obstacle.position.y) < 0.1 // Match y-positions
-            if isColliding && player.position.distance(to: obstacle.position) < 0.3 {
+            if player.position.distance(to: obstacle.position) < 0.3 {
                 gameOver()
             }
         }
