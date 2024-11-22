@@ -24,6 +24,10 @@ class GameManager: ObservableObject {
 
     private var isOnCeiling: Bool = false // Track whether the player is on the ceiling
 
+    private var gameSpeed: Float = 0.064
+    private var maxSpeed: Float = 0.02 // Fastest possible speed
+    private var speedIncrement: Float = 0.0001 // How much the speed increases per frame
+
     
         // MARK: - Scene Setup
     @MainActor func setupScene(for content: RealityViewContent) {
@@ -62,13 +66,22 @@ class GameManager: ObservableObject {
     }
     
     func startGame() {
-        timer = Timer.publish(every: 0.032, on: .main, in: .common) // Smooth updates at 60 FPS
+        timer = Timer.publish(every: Double(gameSpeed), on: .main, in: .common)
             .autoconnect()
             .sink { _ in
                 Task {
                     await self.updateGame()
+                    self.updateSpeed() // Gradually increase speed
                 }
             }
+    }
+    
+    private func updateSpeed() {
+        if gameSpeed > maxSpeed {
+            gameSpeed -= speedIncrement // Decrease interval between frames
+            timer?.cancel() // Restart the timer with the new speed
+            startGame()
+        }
     }
     
     func resetGame() {
@@ -317,7 +330,10 @@ extension GameManager {
         Task {
             await animateProperty(duration: 0.3) { progress in
                 self.player.position.y = Float.lerp(from: self.player.position.y, to: targetY, t: progress)
-                self.player.transform.rotation = simd_slerp(self.player.transform.rotation, targetRotation, progress)
+                
+                    // Maintain consistent orientation (facing forward)
+                let forwardFacingRotation = simd_quatf(angle: .pi / 2, axis: [0, 1, 0]) // Always facing forward
+                self.player.transform.rotation = simd_slerp(forwardFacingRotation, targetRotation * forwardFacingRotation, progress)
             }
         }
     }
